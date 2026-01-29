@@ -269,6 +269,29 @@
             color: var(--accent-red);
         }
         
+        .transaction-buttons {
+            display: flex;
+            gap: 8px;
+            margin-left: 12px;
+        }
+        
+        .edit-btn {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            color: var(--accent-green);
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .edit-btn:active {
+            background: rgba(0, 255, 136, 0.2);
+            transform: scale(0.95);
+        }
+        
         .delete-btn {
             background: rgba(255, 51, 102, 0.1);
             border: 1px solid rgba(255, 51, 102, 0.3);
@@ -278,7 +301,6 @@
             font-size: 12px;
             font-weight: 700;
             cursor: pointer;
-            margin-left: 12px;
             transition: all 0.2s;
         }
         
@@ -479,6 +501,7 @@
     <script>
         let transactions = [];
         let currentType = '';
+        let editingId = null;
         
         async function loadTransactions() {
             try {
@@ -500,59 +523,149 @@
             }
         }
         
-        function openModal(type) {
+        function openModal(type, transactionId = null) {
             currentType = type;
+            editingId = transactionId;
             const modal = document.getElementById('modal');
             const modalTitle = document.getElementById('modalTitle');
             const submitBtn = document.getElementById('submitBtn');
             const dateInput = document.getElementById('date');
+            const form = document.getElementById('transactionForm');
             
-            dateInput.valueAsDate = new Date();
+            form.reset();
             
-            if (type === 'income') {
-                modalTitle.textContent = '➕ Adicionar Provento';
-                submitBtn.textContent = 'Adicionar Provento';
+            if (transactionId) {
+                // Modo de edição/ajuste
+                const transaction = transactions.find(t => t.id === transactionId);
+                modalTitle.textContent = '✏️ Ajustar Valor';
+                
+                document.getElementById('description').value = transaction.description;
+                document.getElementById('description').disabled = true;
+                document.getElementById('date').value = transaction.date;
+                document.getElementById('date').disabled = true;
+                
+                // Mostrar valor atual e campo de ajuste
+                const amountGroup = document.querySelector('.form-group:nth-child(2)');
+                amountGroup.innerHTML = `
+                    <label>Valor Atual</label>
+                    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 14px; border: 1px solid var(--border-color); color: var(--accent-green); font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 16px;">
+                        ${formatCurrency(transaction.amount)}
+                    </div>
+                    <label for="adjustment">Ajustar Valor</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <button type="button" onclick="setAdjustmentType('add')" id="addBtn" style="flex: 1; padding: 12px; background: rgba(0,255,136,0.1); border: 2px solid var(--accent-green); color: var(--accent-green); border-radius: 12px; font-weight: 700; cursor: pointer;">➕ Adicionar</button>
+                        <button type="button" onclick="setAdjustmentType('remove')" id="removeBtn" style="flex: 1; padding: 12px; background: rgba(255,51,102,0.1); border: 2px solid rgba(255,51,102,0.3); color: var(--text-secondary); border-radius: 12px; font-weight: 700; cursor: pointer;">➖ Remover</button>
+                    </div>
+                    <input type="number" id="adjustment" step="0.01" required placeholder="0,00" disabled>
+                    <input type="hidden" id="adjustmentType" value="">
+                `;
+                
+                submitBtn.textContent = 'Salvar Alteração';
                 submitBtn.className = 'btn btn-submit btn-income';
             } else {
-                modalTitle.textContent = '➖ Adicionar Gasto';
-                submitBtn.textContent = 'Adicionar Gasto';
-                submitBtn.className = 'btn btn-submit btn-expense';
+                // Modo de criação
+                document.getElementById('description').disabled = false;
+                document.getElementById('date').disabled = false;
+                dateInput.valueAsDate = new Date();
+                
+                const amountGroup = document.querySelector('.form-group:nth-child(2)');
+                amountGroup.innerHTML = `
+                    <label for="amount">Valor (R$)</label>
+                    <input type="number" id="amount" step="0.01" required placeholder="0,00">
+                `;
+                
+                if (type === 'income') {
+                    modalTitle.textContent = '➕ Adicionar Provento';
+                    submitBtn.textContent = 'Adicionar Provento';
+                    submitBtn.className = 'btn btn-submit btn-income';
+                } else {
+                    modalTitle.textContent = '➖ Adicionar Gasto';
+                    submitBtn.textContent = 'Adicionar Gasto';
+                    submitBtn.className = 'btn btn-submit btn-expense';
+                }
             }
             
             modal.classList.add('active');
+        }
+        
+        function setAdjustmentType(type) {
+            document.getElementById('adjustmentType').value = type;
+            document.getElementById('adjustment').disabled = false;
+            document.getElementById('adjustment').focus();
+            
+            const addBtn = document.getElementById('addBtn');
+            const removeBtn = document.getElementById('removeBtn');
+            
+            if (type === 'add') {
+                addBtn.style.background = 'var(--accent-green)';
+                addBtn.style.color = '#0a0e27';
+                removeBtn.style.background = 'rgba(255,51,102,0.1)';
+                removeBtn.style.color = 'var(--text-secondary)';
+                removeBtn.style.borderColor = 'rgba(255,51,102,0.3)';
+            } else {
+                removeBtn.style.background = 'var(--accent-red)';
+                removeBtn.style.color = '#ffffff';
+                removeBtn.style.borderColor = 'var(--accent-red)';
+                addBtn.style.background = 'rgba(0,255,136,0.1)';
+                addBtn.style.color = 'var(--text-secondary)';
+                addBtn.style.borderColor = 'rgba(0,255,136,0.3)';
+            }
         }
         
         function closeModal() {
             const modal = document.getElementById('modal');
             modal.classList.remove('active');
             document.getElementById('transactionForm').reset();
+            editingId = null;
         }
         
         async function addTransaction(event) {
             event.preventDefault();
             
             const description = document.getElementById('description').value;
-            const amount = parseFloat(document.getElementById('amount').value);
             const date = document.getElementById('date').value;
             
-            const transaction = {
-                id: Date.now(),
-                type: currentType,
-                description,
-                amount,
-                date
-            };
+            if (editingId) {
+                // Modo de edição - ajustar valor
+                const transaction = transactions.find(t => t.id === editingId);
+                const adjustmentType = document.getElementById('adjustmentType').value;
+                const adjustmentValue = parseFloat(document.getElementById('adjustment').value);
+                
+                if (!adjustmentType) {
+                    alert('Selecione se deseja adicionar ou remover valor');
+                    return;
+                }
+                
+                if (adjustmentType === 'add') {
+                    transaction.amount += adjustmentValue;
+                } else {
+                    transaction.amount -= adjustmentValue;
+                    if (transaction.amount < 0) transaction.amount = 0;
+                }
+            } else {
+                // Modo de criação
+                const amount = parseFloat(document.getElementById('amount').value);
+                const transaction = {
+                    id: Date.now(),
+                    type: currentType,
+                    description,
+                    amount,
+                    date
+                };
+                transactions.unshift(transaction);
+            }
             
-            transactions.unshift(transaction);
             await saveTransactions();
             updateDisplay();
             closeModal();
         }
         
         async function deleteTransaction(id) {
-            transactions = transactions.filter(t => t.id !== id);
-            await saveTransactions();
-            updateDisplay();
+            if (confirm('Deseja realmente excluir esta transação?')) {
+                transactions = transactions.filter(t => t.id !== id);
+                await saveTransactions();
+                updateDisplay();
+            }
         }
         
         function updateDisplay() {
@@ -588,7 +701,10 @@
                             <div class="transaction-date">${formatDate(t.date)}</div>
                         </div>
                         <div class="transaction-amount">${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}</div>
-                        <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑</button>
+                        <div class="transaction-buttons">
+                            <button class="edit-btn" onclick="openModal('${t.type}', ${t.id})">✏️</button>
+                            <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑</button>
+                        </div>
                     </div>
                 `).join('');
             }
