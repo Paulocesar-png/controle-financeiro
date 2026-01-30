@@ -665,25 +665,45 @@
                 // Construir histórico de ajustes
                 let adjustmentsHTML = '';
                 if (transaction.adjustments && transaction.adjustments.length > 0) {
+                    // Calcular resumo
+                    const additions = transaction.adjustments.filter(a => a.type === 'add');
+                    const removals = transaction.adjustments.filter(a => a.type === 'remove');
+                    const totalAdditions = additions.reduce((sum, a) => sum + a.amount, 0);
+                    const totalRemovals = removals.reduce((sum, a) => sum + a.amount, 0);
+                    
+                    const historyDetailsHTML = transaction.adjustments.map(adj => {
+                        const adjDate = new Date(adj.date);
+                        const formattedDate = adjDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                        const adjColor = adj.type === 'add' ? 'var(--accent-green)' : 'var(--accent-red)';
+                        const adjSign = adj.type === 'add' ? '+' : '-';
+                        return `
+                            <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 2px;">${adj.description}</div>
+                                    <div style="font-size: 11px; color: var(--text-secondary);">${formattedDate}</div>
+                                </div>
+                                <div style="font-size: 15px; font-weight: 700; color: ${adjColor};">${adjSign} ${formatCurrency(adj.amount)}</div>
+                            </div>
+                        `;
+                    }).join('');
+                    
                     adjustmentsHTML = `
                         <div style="margin-top: 16px; margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--border-color);">
-                            <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Histórico de Ajustes</div>
-                            <div style="max-height: 200px; overflow-y: auto;">
-                                ${transaction.adjustments.map(adj => {
-                                    const adjDate = new Date(adj.date);
-                                    const formattedDate = adjDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-                                    const adjColor = adj.type === 'add' ? 'var(--accent-green)' : 'var(--accent-red)';
-                                    const adjSign = adj.type === 'add' ? '+' : '-';
-                                    return `
-                                        <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
-                                            <div style="flex: 1;">
-                                                <div style="font-size: 13px; font-weight: 600; margin-bottom: 2px;">${adj.description}</div>
-                                                <div style="font-size: 11px; color: var(--text-secondary);">${formattedDate}</div>
-                                            </div>
-                                            <div style="font-size: 15px; font-weight: 700; color: ${adjColor};">${adjSign} ${formatCurrency(adj.amount)}</div>
-                                        </div>
-                                    `;
-                                }).join('')}
+                            <div onclick="toggleHistory()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px;">
+                                <div>
+                                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Histórico de Ajustes</div>
+                                    <div style="font-size: 13px; margin-top: 4px; color: var(--text-primary);">
+                                        <span style="color: var(--accent-green);">${additions.length} ${additions.length === 1 ? 'adição' : 'adições'}</span>
+                                        ${additions.length > 0 ? `<span style="color: var(--accent-green); font-weight: 700;"> (+${formatCurrency(totalAdditions)})</span>` : ''}
+                                        ${additions.length > 0 && removals.length > 0 ? ' • ' : ''}
+                                        ${removals.length > 0 ? `<span style="color: var(--accent-red);">${removals.length} ${removals.length === 1 ? 'remoção' : 'remoções'}</span>` : ''}
+                                        ${removals.length > 0 ? `<span style="color: var(--accent-red); font-weight: 700;"> (-${formatCurrency(totalRemovals)})</span>` : ''}
+                                    </div>
+                                </div>
+                                <div id="historyToggle" style="font-size: 18px; transition: transform 0.2s;">▼</div>
+                            </div>
+                            <div id="historyDetails" style="display: none; max-height: 200px; overflow-y: auto; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                                ${historyDetailsHTML}
                             </div>
                         </div>
                     `;
@@ -759,6 +779,19 @@
                 addBtn.style.background = 'rgba(0,255,136,0.1)';
                 addBtn.style.color = 'var(--text-secondary)';
                 addBtn.style.borderColor = 'rgba(0,255,136,0.3)';
+            }
+        }
+        
+        function toggleHistory() {
+            const historyDetails = document.getElementById('historyDetails');
+            const historyToggle = document.getElementById('historyToggle');
+            
+            if (historyDetails.style.display === 'none') {
+                historyDetails.style.display = 'block';
+                historyToggle.style.transform = 'rotate(180deg)';
+            } else {
+                historyDetails.style.display = 'none';
+                historyToggle.style.transform = 'rotate(0deg)';
             }
         }
         
