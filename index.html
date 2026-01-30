@@ -218,7 +218,7 @@
             position: relative;
             overflow: hidden;
             transition: all 0.2s;
-            touch-action: none;
+            /* touch-action: none; REMOVIDO - Permitir scroll */
         }
         
         .transaction-item.dragging {
@@ -239,7 +239,7 @@
             font-size: 20px;
             padding: 8px;
             margin-right: 8px;
-            touch-action: none;
+            touch-action: none; /* Manter apenas no handle */
             user-select: none;
         }
         
@@ -905,6 +905,9 @@
         let touchStartY = 0;
         let touchElement = null;
         let placeholder = null;
+        let autoScrollInterval = null;
+        const SCROLL_SPEED = 10;
+        const SCROLL_ZONE = 100; // Pixels da borda para ativar auto-scroll
         
         function handleTouchStart(e) {
             const handle = e.target.closest('.drag-handle');
@@ -929,13 +932,26 @@
             
             const touch = e.touches[0];
             const deltaY = touch.clientY - touchStartY;
+            const touchY = touch.clientY;
             
             // Mover visualmente o elemento
             touchElement.style.transform = `translateY(${deltaY}px)`;
             
+            // Auto-scroll quando próximo das bordas
+            const windowHeight = window.innerHeight;
+            
+            if (touchY < SCROLL_ZONE) {
+                // Perto do topo - scroll para cima
+                startAutoScroll(-SCROLL_SPEED);
+            } else if (touchY > windowHeight - SCROLL_ZONE) {
+                // Perto do fundo - scroll para baixo
+                startAutoScroll(SCROLL_SPEED);
+            } else {
+                stopAutoScroll();
+            }
+            
             // Detectar sobre qual item está
             const items = Array.from(document.querySelectorAll('.transaction-item'));
-            const touchY = touch.clientY;
             
             items.forEach(item => {
                 if (item === touchElement) return;
@@ -950,8 +966,25 @@
             });
         }
         
+        function startAutoScroll(speed) {
+            if (autoScrollInterval) return; // Já está rolando
+            
+            autoScrollInterval = setInterval(() => {
+                window.scrollBy(0, speed);
+            }, 16); // ~60fps
+        }
+        
+        function stopAutoScroll() {
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+        }
+        
         function handleTouchEnd(e) {
             if (!touchElement) return;
+            
+            stopAutoScroll(); // Parar auto-scroll
             
             touchElement.style.transform = '';
             touchElement.classList.remove('dragging');
