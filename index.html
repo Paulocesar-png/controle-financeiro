@@ -777,19 +777,23 @@
                     const totalAdditions = additions.reduce((sum, a) => sum + a.amount, 0);
                     const totalRemovals = removals.reduce((sum, a) => sum + a.amount, 0);
                     
-                    const historyDetailsHTML = transaction.adjustments.map(adj => {
+                    const historyDetailsHTML = transaction.adjustments.map((adj, adjIndex) => {
                         const adjDate = new Date(adj.date);
                         const formattedDate = adjDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
                         const adjColor = adj.type === 'add' ? 'var(--accent-green)' : 'var(--accent-red)';
                         const adjSign = adj.type === 'add' ? '+' : '-';
                         const recurringBadge = adj.recurring ? '<span style="background: rgba(100,150,255,0.2); color: #6496ff; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">🔄 RECORRENTE</span>' : '';
                         return `
-                            <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                                 <div style="flex: 1;">
                                     <div style="font-size: 13px; font-weight: 600; margin-bottom: 2px;">${adj.description} ${recurringBadge}</div>
                                     <div style="font-size: 11px; color: var(--text-secondary);">${formattedDate}</div>
                                 </div>
                                 <div style="font-size: 15px; font-weight: 700; color: ${adjColor};">${adjSign} ${formatCurrency(adj.amount)}</div>
+                                <div style="display: flex; gap: 6px;">
+                                    <button onclick="editAdjustment(${transaction.id}, ${adjIndex})" style="background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; padding: 6px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all 0.2s; flex-shrink: 0;" onmouseover="this.style.background='rgba(100,150,255,0.2)'" onmouseout="this.style.background='rgba(100,150,255,0.1)'">✏️</button>
+                                    <button onclick="deleteAdjustment(${transaction.id}, ${adjIndex})" style="background: rgba(255,51,102,0.1); border: 1px solid rgba(255,51,102,0.3); color: var(--accent-red); padding: 6px 10px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: all 0.2s; flex-shrink: 0;" onmouseover="this.style.background='rgba(255,51,102,0.2)'" onmouseout="this.style.background='rgba(255,51,102,0.1)'">🗑️</button>
+                                </div>
                             </div>
                         `;
                     }).join('');
@@ -818,11 +822,24 @@
                 
                 amountGroup.innerHTML = `
                     <label>Valor Atual</label>
-                    <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 14px; border: 1px solid var(--border-color); color: var(--accent-green); font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 16px;">
-                        ${formatCurrency(transaction.amount)}
+                    <div style="position: relative;">
+                        <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 14px; border: 1px solid var(--border-color); color: var(--accent-green); font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 16px; display: flex; justify-content: center; align-items: center; gap: 12px;">
+                            <span id="currentAmountDisplay">${formatCurrency(transaction.amount)}</span>
+                            <button onclick="toggleEditAmount()" id="editAmountBtn" type="button" style="background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; padding: 8px 12px; border-radius: 10px; font-size: 14px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(100,150,255,0.2)'" onmouseout="this.style.background='rgba(100,150,255,0.1)'">✏️ Editar</button>
+                        </div>
+                        <div id="editAmountSection" style="display: none; margin-bottom: 16px;">
+                            <input type="number" id="newAmount" step="0.01" placeholder="Novo valor total" style="padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%; margin-bottom: 8px;">
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="saveNewAmount(${transaction.id})" type="button" style="flex: 1; padding: 12px; background: var(--accent-green); color: #0a0e27; border: none; border-radius: 12px; font-weight: 700; cursor: pointer;">✓ Salvar</button>
+                                <button onclick="toggleEditAmount()" type="button" style="flex: 1; padding: 12px; background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 12px; font-weight: 700; cursor: pointer;">✕ Cancelar</button>
+                            </div>
+                        </div>
                     </div>
                     ${adjustmentsHTML}
-                    <label for="adjustment">Novo Ajuste</label>
+                    <div id="adjustmentFormHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <label for="adjustment" style="margin: 0;">Novo Ajuste</label>
+                        <button type="button" id="cancelEditBtn" onclick="cancelAdjustmentEdit()" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">✕ Cancelar Edição</button>
+                    </div>
                     <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                         <button type="button" onclick="setAdjustmentType('add')" id="addBtn" style="flex: 1; padding: 12px; background: rgba(0,255,136,0.1); border: 2px solid var(--accent-green); color: var(--accent-green); border-radius: 12px; font-weight: 700; cursor: pointer;">➕ Adicionar</button>
                         <button type="button" onclick="setAdjustmentType('remove')" id="removeBtn" style="flex: 1; padding: 12px; background: rgba(255,51,102,0.1); border: 2px solid rgba(255,51,102,0.3); color: var(--text-secondary); border-radius: 12px; font-weight: 700; cursor: pointer;">➖ Remover</button>
@@ -904,6 +921,123 @@
             } else {
                 historyDetails.style.display = 'none';
                 historyToggle.style.transform = 'rotate(0deg)';
+            }
+        }
+        
+        function toggleEditAmount() {
+            const editSection = document.getElementById('editAmountSection');
+            const editBtn = document.getElementById('editAmountBtn');
+            
+            if (editSection.style.display === 'none') {
+                editSection.style.display = 'block';
+                editBtn.style.display = 'none';
+                // Focar no input
+                document.getElementById('newAmount').focus();
+            } else {
+                editSection.style.display = 'none';
+                editBtn.style.display = 'block';
+                document.getElementById('newAmount').value = '';
+            }
+        }
+        
+        async function saveNewAmount(transactionId) {
+            const newAmountInput = document.getElementById('newAmount');
+            const newAmount = parseFloat(newAmountInput.value);
+            
+            if (isNaN(newAmount) || newAmount <= 0) {
+                alert('⚠️ Digite um valor válido maior que zero');
+                newAmountInput.focus();
+                return;
+            }
+            
+            const transaction = transactions.find(t => t.id === transactionId);
+            if (!transaction) {
+                alert('❌ Transação não encontrada!');
+                return;
+            }
+            
+            const oldAmount = transaction.amount;
+            
+            if (!confirm(`Alterar valor de ${formatCurrency(oldAmount)} para ${formatCurrency(newAmount)}?\n\n⚠️ Esta ação irá substituir o valor total atual.`)) {
+                return;
+            }
+            
+            // Atualizar valor
+            transaction.amount = newAmount;
+            
+            await saveTransactions();
+            
+            // Reabrir modal para mostrar mudança
+            closeModal();
+            setTimeout(() => {
+                openModal(transaction.type, transactionId);
+            }, 100);
+        }
+        
+        let editingAdjustmentIndex = null;
+        
+        function editAdjustment(transactionId, adjustmentIndex) {
+            const transaction = transactions.find(t => t.id === transactionId);
+            if (!transaction || !transaction.adjustments || !transaction.adjustments[adjustmentIndex]) {
+                alert('❌ Ajuste não encontrado!');
+                return;
+            }
+            
+            editingAdjustmentIndex = adjustmentIndex;
+            const adjustment = transaction.adjustments[adjustmentIndex];
+            
+            // Mostrar seção de edição
+            document.getElementById('adjustmentType').value = adjustment.type;
+            document.getElementById('adjustment').disabled = false;
+            document.getElementById('adjustment').value = adjustment.amount;
+            document.getElementById('adjustmentDesc').disabled = false;
+            document.getElementById('adjustmentDesc').value = adjustment.description;
+            document.getElementById('recurring').disabled = false;
+            document.getElementById('recurring').checked = adjustment.recurring || false;
+            
+            // Atualizar botões visuais
+            setAdjustmentType(adjustment.type);
+            
+            // Mudar texto do botão de submit
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.textContent = '💾 Salvar Edição do Ajuste';
+            
+            // Mostrar botão de cancelar
+            const cancelBtn = document.getElementById('cancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'block';
+            
+            // Scroll suave para o formulário de ajuste
+            document.getElementById('adjustment').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.getElementById('adjustment').focus();
+        }
+        
+        function cancelAdjustmentEdit() {
+            editingAdjustmentIndex = null;
+            document.getElementById('adjustmentType').value = '';
+            document.getElementById('adjustment').value = '';
+            document.getElementById('adjustment').disabled = true;
+            document.getElementById('adjustmentDesc').value = '';
+            document.getElementById('adjustmentDesc').disabled = true;
+            document.getElementById('recurring').checked = false;
+            document.getElementById('recurring').disabled = true;
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.textContent = 'Salvar Alteração';
+            
+            // Ocultar botão de cancelar
+            const cancelBtn = document.getElementById('cancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+            
+            // Resetar botões visuais
+            const addBtn = document.getElementById('addBtn');
+            const removeBtn = document.getElementById('removeBtn');
+            if (addBtn && removeBtn) {
+                addBtn.style.background = 'rgba(0,255,136,0.1)';
+                addBtn.style.color = 'var(--accent-green)';
+                addBtn.style.borderColor = 'var(--accent-green)';
+                removeBtn.style.background = 'rgba(255,51,102,0.1)';
+                removeBtn.style.color = 'var(--text-secondary)';
+                removeBtn.style.borderColor = 'rgba(255,51,102,0.3)';
             }
         }
         
@@ -1130,21 +1264,53 @@
                 // Verificar se é recorrente
                 const isRecurring = document.getElementById('recurring') ? document.getElementById('recurring').checked : false;
                 
-                // Adicionar novo ajuste ao histórico
-                transaction.adjustments.push({
-                    type: adjustmentType,
-                    amount: adjustmentValue,
-                    description: adjustmentDesc,
-                    date: new Date().toISOString(),
-                    recurring: isRecurring
-                });
-                
-                // Atualizar valor total
-                if (adjustmentType === 'add') {
-                    transaction.amount += adjustmentValue;
+                // Verificar se está editando um ajuste existente
+                if (editingAdjustmentIndex !== null) {
+                    // MODO EDIÇÃO DE AJUSTE
+                    const oldAdjustment = transaction.adjustments[editingAdjustmentIndex];
+                    
+                    // Reverter o ajuste antigo
+                    if (oldAdjustment.type === 'add') {
+                        transaction.amount -= oldAdjustment.amount;
+                    } else {
+                        transaction.amount += oldAdjustment.amount;
+                    }
+                    
+                    // Atualizar o ajuste
+                    transaction.adjustments[editingAdjustmentIndex] = {
+                        type: adjustmentType,
+                        amount: adjustmentValue,
+                        description: adjustmentDesc,
+                        date: oldAdjustment.date, // Manter data original
+                        recurring: isRecurring
+                    };
+                    
+                    // Aplicar o novo ajuste
+                    if (adjustmentType === 'add') {
+                        transaction.amount += adjustmentValue;
+                    } else {
+                        transaction.amount -= adjustmentValue;
+                        if (transaction.amount < 0) transaction.amount = 0;
+                    }
+                    
+                    editingAdjustmentIndex = null; // Limpar flag de edição
                 } else {
-                    transaction.amount -= adjustmentValue;
-                    if (transaction.amount < 0) transaction.amount = 0;
+                    // MODO NOVO AJUSTE
+                    transaction.adjustments.push({
+                        type: adjustmentType,
+                        amount: adjustmentValue,
+                        description: adjustmentDesc,
+                        date: new Date().toISOString(),
+                        recurring: isRecurring
+                    });
+                    
+                    // Atualizar valor total
+                    if (adjustmentType === 'add') {
+                        transaction.amount += adjustmentValue;
+                    } else {
+                        transaction.amount -= adjustmentValue;
+                        if (transaction.amount < 0) transaction.amount = 0;
+                    }
                 }
             } else {
                 // Modo de criação
@@ -1173,6 +1339,41 @@
                 await saveTransactions();
                 updateDisplay();
             }
+        }
+        
+        async function deleteAdjustment(transactionId, adjustmentIndex) {
+            const transaction = transactions.find(t => t.id === transactionId);
+            if (!transaction || !transaction.adjustments || !transaction.adjustments[adjustmentIndex]) {
+                alert('❌ Ajuste não encontrado!');
+                return;
+            }
+            
+            const adjustment = transaction.adjustments[adjustmentIndex];
+            const adjDescription = adjustment.description;
+            const adjAmount = formatCurrency(adjustment.amount);
+            const adjType = adjustment.type === 'add' ? 'adição' : 'remoção';
+            
+            if (!confirm(`Deseja realmente deletar este ajuste?\n\n${adjDescription}\n${adjType === 'adição' ? '+' : '-'} ${adjAmount}\n\n⚠️ O valor será revertido automaticamente.`)) {
+                return;
+            }
+            
+            // Reverter o ajuste do valor total
+            if (adjustment.type === 'add') {
+                transaction.amount -= adjustment.amount;
+            } else {
+                transaction.amount += adjustment.amount;
+            }
+            
+            // Remover o ajuste do array
+            transaction.adjustments.splice(adjustmentIndex, 1);
+            
+            await saveTransactions();
+            
+            // Reabrir o modal para mostrar a mudança
+            closeModal();
+            setTimeout(() => {
+                openModal(transaction.type, transactionId);
+            }, 100);
         }
         
         async function deleteTransaction(id) {
