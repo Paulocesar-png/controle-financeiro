@@ -218,6 +218,33 @@
             position: relative;
             overflow: hidden;
             transition: all 0.2s;
+            touch-action: none;
+        }
+        
+        .transaction-item.dragging {
+            opacity: 0.5;
+            transform: scale(1.05);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+        }
+        
+        .transaction-item.drag-over {
+            border-color: var(--accent-green);
+            transform: translateY(-4px);
+        }
+        
+        .drag-handle {
+            cursor: move;
+            color: var(--text-secondary);
+            font-size: 20px;
+            padding: 8px;
+            margin-right: 8px;
+            touch-action: none;
+            user-select: none;
+        }
+        
+        .drag-handle:active {
+            color: var(--accent-green);
         }
         
         .transaction-item::before {
@@ -478,11 +505,14 @@
     
     <div class="transactions">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div class="transactions-header">Últimas Transações</div>
+            <div class="transactions-header">Transações</div>
             <div style="display: flex; gap: 8px;">
-                <button onclick="exportData()" style="background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); color: var(--accent-green); padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">💾 Backup</button>
-                <button onclick="document.getElementById('importFile').click()" style="background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">📥 Restaurar</button>
+                <button onclick="exportData()" style="background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); color: var(--accent-green); padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">💾</button>
+                <button onclick="document.getElementById('importFile').click()" style="background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">📥</button>
             </div>
+        </div>
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; text-align: center;">
+            Segure e arraste ≡ para reordenar
         </div>
         <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(this.files[0])">
         <div id="transactionsList"></div>
@@ -550,7 +580,7 @@
         
         function getCurrentMonthTransactions() {
             const monthKey = getMonthKey(currentMonth, currentYear);
-            return transactions.filter(t => {
+            const filtered = transactions.filter(t => {
                 // Extrair ano e mês diretamente da string de data (formato YYYY-MM-DD)
                 const dateParts = t.date.split('-');
                 const tYear = parseInt(dateParts[0]);
@@ -558,6 +588,21 @@
                 const tMonthKey = getMonthKey(tMonth, tYear);
                 return tMonthKey === monthKey;
             });
+            
+            // Ordenar pela ordem customizada se existir, senão por data
+            filtered.sort((a, b) => {
+                const aOrder = a.customOrder && a.customOrder[monthKey] !== undefined ? a.customOrder[monthKey] : 999999;
+                const bOrder = b.customOrder && b.customOrder[monthKey] !== undefined ? b.customOrder[monthKey] : 999999;
+                
+                if (aOrder !== bOrder) {
+                    return aOrder - bOrder;
+                }
+                
+                // Se não tem ordem customizada, ordenar por data (mais recente primeiro)
+                return new Date(b.date) - new Date(a.date);
+            });
+            
+            return filtered;
         }
         
         let db;
@@ -795,6 +840,157 @@
             }
         }
         
+        let draggedElement = null;
+        let draggedIndex = null;
+        
+        function setupDragAndDrop() {
+            const items = document.querySelectorAll('.transaction-item');
+            
+            items.forEach((item, index) => {
+                // Desktop - Drag Events
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragend', handleDragEnd);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+                item.addEventListener('dragleave', handleDragLeave);
+                
+                // Mobile - Touch Events
+                item.addEventListener('touchstart', handleTouchStart, { passive: false });
+                item.addEventListener('touchmove', handleTouchMove, { passive: false });
+                item.addEventListener('touchend', handleTouchEnd);
+            });
+        }
+        
+        function handleDragStart(e) {
+            draggedElement = this;
+            draggedIndex = parseInt(this.dataset.index);
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+        
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.transaction-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            if (this !== draggedElement) {
+                this.classList.add('drag-over');
+            }
+            return false;
+        }
+        
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+        
+        function handleDrop(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            
+            if (this !== draggedElement) {
+                const targetIndex = parseInt(this.dataset.index);
+                reorderTransactions(draggedIndex, targetIndex);
+            }
+            
+            return false;
+        }
+        
+        // Touch events para mobile
+        let touchStartY = 0;
+        let touchElement = null;
+        let placeholder = null;
+        
+        function handleTouchStart(e) {
+            const handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            
+            e.preventDefault();
+            touchElement = this;
+            draggedIndex = parseInt(this.dataset.index);
+            touchStartY = e.touches[0].clientY;
+            
+            this.classList.add('dragging');
+            
+            // Criar placeholder
+            placeholder = this.cloneNode(true);
+            placeholder.style.opacity = '0.3';
+            placeholder.style.pointerEvents = 'none';
+        }
+        
+        function handleTouchMove(e) {
+            if (!touchElement) return;
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            const deltaY = touch.clientY - touchStartY;
+            
+            // Mover visualmente o elemento
+            touchElement.style.transform = `translateY(${deltaY}px)`;
+            
+            // Detectar sobre qual item está
+            const items = Array.from(document.querySelectorAll('.transaction-item'));
+            const touchY = touch.clientY;
+            
+            items.forEach(item => {
+                if (item === touchElement) return;
+                const rect = item.getBoundingClientRect();
+                const itemMiddle = rect.top + rect.height / 2;
+                
+                if (touchY > rect.top && touchY < rect.bottom) {
+                    item.classList.add('drag-over');
+                } else {
+                    item.classList.remove('drag-over');
+                }
+            });
+        }
+        
+        function handleTouchEnd(e) {
+            if (!touchElement) return;
+            
+            touchElement.style.transform = '';
+            touchElement.classList.remove('dragging');
+            
+            // Encontrar o item sobre o qual soltou
+            const items = Array.from(document.querySelectorAll('.transaction-item'));
+            const dragOverItem = items.find(item => item.classList.contains('drag-over'));
+            
+            if (dragOverItem) {
+                const targetIndex = parseInt(dragOverItem.dataset.index);
+                reorderTransactions(draggedIndex, targetIndex);
+            }
+            
+            items.forEach(item => item.classList.remove('drag-over'));
+            touchElement = null;
+            draggedIndex = null;
+        }
+        
+        async function reorderTransactions(fromIndex, toIndex) {
+            const monthKey = getMonthKey(currentMonth, currentYear);
+            
+            // Pegar transações do mês atual
+            const monthTransactions = getCurrentMonthTransactions();
+            
+            // Reordenar
+            const [movedItem] = monthTransactions.splice(fromIndex, 1);
+            monthTransactions.splice(toIndex, 0, movedItem);
+            
+            // Salvar ordem customizada
+            movedItem.customOrder = movedItem.customOrder || {};
+            monthTransactions.forEach((t, idx) => {
+                t.customOrder = t.customOrder || {};
+                t.customOrder[monthKey] = idx;
+            });
+            
+            await saveTransactions();
+            updateDisplay();
+        }
+        
         function closeModal() {
             const modal = document.getElementById('modal');
             modal.classList.remove('active');
@@ -938,8 +1134,9 @@
                     </div>
                 `;
             } else {
-                transactionsList.innerHTML = monthTransactions.map(t => `
-                    <div class="transaction-item ${t.type}">
+                transactionsList.innerHTML = monthTransactions.map((t, index) => `
+                    <div class="transaction-item ${t.type}" draggable="true" data-id="${t.id}" data-index="${index}">
+                        <div class="drag-handle">≡</div>
                         <div class="transaction-info">
                             <div class="transaction-description">${t.description}</div>
                             <div class="transaction-date">${formatDate(t.date)}</div>
@@ -951,6 +1148,9 @@
                         </div>
                     </div>
                 `).join('');
+                
+                // Adicionar event listeners para drag and drop
+                setupDragAndDrop();
             }
         }
         
