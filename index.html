@@ -443,11 +443,18 @@
     <div class="header">
         <h1>💰 Controle Financeiro</h1>
         <p>Gerencie seus gastos e proventos</p>
+        <div style="margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 12px;">
+            <button onclick="changeMonth(-1)" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer;">‹</button>
+            <div onclick="goToCurrentMonth()" id="currentMonth" style="font-size: 16px; font-weight: 700; min-width: 150px; text-align: center; cursor: pointer;"></div>
+            <button onclick="changeMonth(1)" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer;">›</button>
+        </div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">Clique no mês para voltar ao atual</div>
     </div>
     
     <div class="balance-card">
         <div class="balance-label">Saldo Atual</div>
         <div class="balance-amount" id="balance">R$ 0,00</div>
+        <div id="monthStatus" style="text-align: center; margin-top: 8px; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; display: inline-block;"></div>
         <div class="balance-summary">
             <div class="summary-item income">
                 <div class="summary-label">Proventos</div>
@@ -509,6 +516,46 @@
         let transactions = [];
         let currentType = '';
         let editingId = null;
+        
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        
+        const monthNames = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+        
+        function changeMonth(direction) {
+            currentMonth += direction;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            } else if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            updateDisplay();
+        }
+        
+        function goToCurrentMonth() {
+            const today = new Date();
+            currentMonth = today.getMonth();
+            currentYear = today.getFullYear();
+            updateDisplay();
+        }
+        
+        function getMonthKey(month, year) {
+            return `${year}-${String(month + 1).padStart(2, '0')}`;
+        }
+        
+        function getCurrentMonthTransactions() {
+            const monthKey = getMonthKey(currentMonth, currentYear);
+            return transactions.filter(t => {
+                const tDate = new Date(t.date);
+                const tMonthKey = getMonthKey(tDate.getMonth(), tDate.getFullYear());
+                return tMonthKey === monthKey;
+            });
+        }
         
         let db;
         
@@ -631,7 +678,10 @@
                 // Modo de criação
                 document.getElementById('description').disabled = false;
                 document.getElementById('date').disabled = false;
-                dateInput.valueAsDate = new Date();
+                
+                // Definir data para o primeiro dia do mês selecionado
+                const defaultDate = new Date(currentYear, currentMonth, 1);
+                dateInput.valueAsDate = defaultDate;
                 
                 const amountGroup = document.querySelector('.form-group:nth-child(2)');
                 amountGroup.innerHTML = `
@@ -734,11 +784,49 @@
         }
         
         function updateDisplay() {
-            const totalIncome = transactions
+            // Atualizar nome do mês no header
+            const today = new Date();
+            const isCurrentMonth = currentMonth === today.getMonth() && currentYear === today.getFullYear();
+            const isFutureMonth = currentYear > today.getFullYear() || 
+                                 (currentYear === today.getFullYear() && currentMonth > today.getMonth());
+            const isPastMonth = currentYear < today.getFullYear() || 
+                               (currentYear === today.getFullYear() && currentMonth < today.getMonth());
+            
+            let monthLabel = `${monthNames[currentMonth]} ${currentYear}`;
+            if (isCurrentMonth) {
+                monthLabel += ' (Atual)';
+            } else if (isFutureMonth) {
+                monthLabel += ' 📅';
+            }
+            document.getElementById('currentMonth').textContent = monthLabel;
+            
+            // Atualizar status do mês
+            const monthStatus = document.getElementById('monthStatus');
+            if (isFutureMonth) {
+                monthStatus.textContent = '📅 Planejamento Futuro';
+                monthStatus.style.background = 'rgba(100, 150, 255, 0.15)';
+                monthStatus.style.color = '#6496ff';
+                monthStatus.style.border = '1px solid rgba(100, 150, 255, 0.3)';
+            } else if (isCurrentMonth) {
+                monthStatus.textContent = '✅ Mês Atual';
+                monthStatus.style.background = 'rgba(0, 255, 136, 0.15)';
+                monthStatus.style.color = 'var(--accent-green)';
+                monthStatus.style.border = '1px solid rgba(0, 255, 136, 0.3)';
+            } else if (isPastMonth) {
+                monthStatus.textContent = '📊 Histórico';
+                monthStatus.style.background = 'rgba(148, 163, 184, 0.15)';
+                monthStatus.style.color = 'var(--text-secondary)';
+                monthStatus.style.border = '1px solid rgba(148, 163, 184, 0.3)';
+            }
+            
+            // Filtrar transações do mês
+            const monthTransactions = getCurrentMonthTransactions();
+            
+            const totalIncome = monthTransactions
                 .filter(t => t.type === 'income')
                 .reduce((sum, t) => sum + t.amount, 0);
             
-            const totalExpense = transactions
+            const totalExpense = monthTransactions
                 .filter(t => t.type === 'expense')
                 .reduce((sum, t) => sum + t.amount, 0);
             
@@ -751,15 +839,16 @@
             
             const transactionsList = document.getElementById('transactionsList');
             
-            if (transactions.length === 0) {
+            if (monthTransactions.length === 0) {
+                const isPlanning = isFutureMonth;
                 transactionsList.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">📊</div>
-                        <div class="empty-state-text">Nenhuma transação ainda.<br>Adicione seu primeiro registro!</div>
+                        <div class="empty-state-icon">${isPlanning ? '📅' : '📊'}</div>
+                        <div class="empty-state-text">${isPlanning ? 'Nenhum planejamento para este mês.<br>Adicione seus gastos e proventos futuros!' : 'Nenhuma transação neste mês.<br>Adicione seu primeiro registro!'}</div>
                     </div>
                 `;
             } else {
-                transactionsList.innerHTML = transactions.map(t => `
+                transactionsList.innerHTML = monthTransactions.map(t => `
                     <div class="transaction-item ${t.type}">
                         <div class="transaction-info">
                             <div class="transaction-description">${t.description}</div>
