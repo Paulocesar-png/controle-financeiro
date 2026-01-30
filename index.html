@@ -1186,13 +1186,26 @@
             const previousMonthKey = getMonthKey(previousMonth, previousYear);
             const currentMonthKey = getMonthKey(currentMonth, currentYear);
             
-            // Buscar transações do mês anterior
+            // Buscar transações do mês anterior JÁ ORDENADAS
             const previousMonthTransactions = transactions.filter(t => {
                 const dateParts = t.date.split('-');
                 const tYear = parseInt(dateParts[0]);
                 const tMonth = parseInt(dateParts[1]) - 1;
                 const tMonthKey = getMonthKey(tMonth, tYear);
                 return tMonthKey === previousMonthKey;
+            });
+            
+            // ORDENAR pela ordem customizada do mês anterior (CRUCIAL!)
+            previousMonthTransactions.sort((a, b) => {
+                const aOrder = a.customOrder && a.customOrder[previousMonthKey] !== undefined ? a.customOrder[previousMonthKey] : 999999;
+                const bOrder = b.customOrder && b.customOrder[previousMonthKey] !== undefined ? b.customOrder[previousMonthKey] : 999999;
+                
+                if (aOrder !== bOrder) {
+                    return aOrder - bOrder;
+                }
+                
+                // Se não tem ordem customizada, ordenar por data
+                return new Date(b.date) - new Date(a.date);
             });
             
             // Verificar se já existem transações no mês atual
