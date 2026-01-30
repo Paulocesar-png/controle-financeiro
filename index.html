@@ -221,6 +221,20 @@
             /* touch-action: none; REMOVIDO - Permitir scroll */
         }
         
+        .transaction-item.paid {
+            opacity: 0.6;
+            background: rgba(26, 31, 58, 0.5);
+        }
+        
+        .transaction-item.paid .transaction-description {
+            text-decoration: line-through;
+            color: var(--text-secondary);
+        }
+        
+        .transaction-item.paid .transaction-amount {
+            opacity: 0.6;
+        }
+        
         .transaction-item.dragging {
             opacity: 0.5;
             transform: scale(1.05);
@@ -337,6 +351,31 @@
         .delete-btn:active {
             background: rgba(255, 51, 102, 0.2);
             transform: scale(0.95);
+        }
+        
+        .pay-checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            transition: all 0.2s;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .pay-checkbox:active {
+            transform: scale(0.9);
+        }
+        
+        .pay-checkbox.checked {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
         }
         
         .modal {
@@ -506,6 +545,12 @@
         </button>
     </div>
     
+    <div style="padding: 0 20px; margin-bottom: 20px;" id="replicateButtonContainer">
+        <button id="replicateBtn" onclick="replicatePreviousMonth()" style="width: 100%; padding: 14px; background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; border-radius: 14px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(100,150,255,0.2)'" onmouseout="this.style.background='rgba(100,150,255,0.1)'">
+            <span id="replicateBtnText">📋 Replicar Mês Anterior</span>
+        </button>
+    </div>
+    
     <div class="transactions">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <div class="transactions-header">Transações</div>
@@ -514,8 +559,8 @@
                 <button onclick="document.getElementById('importFile').click()" style="background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">📥</button>
             </div>
         </div>
-        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; text-align: center;">
-            Segure e arraste ≡ para reordenar
+        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; text-align: center; line-height: 1.5;">
+            Segure ≡ para reordenar • Clique em ☐ para marcar gasto como pago
         </div>
         <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(this.files[0])">
         <div id="transactionsList"></div>
@@ -1087,7 +1132,8 @@
                     description,
                     amount,
                     date,
-                    adjustments: [] // Inicializar com array vazio
+                    adjustments: [], // Inicializar com array vazio
+                    paid: false // Status de pagamento
                 };
                 transactions.unshift(transaction);
             }
@@ -1097,12 +1143,92 @@
             closeModal();
         }
         
+        async function togglePaid(id) {
+            const transaction = transactions.find(t => t.id === id);
+            if (transaction) {
+                transaction.paid = !transaction.paid;
+                await saveTransactions();
+                updateDisplay();
+            }
+        }
+        
         async function deleteTransaction(id) {
             if (confirm('Deseja realmente excluir esta transação?')) {
                 transactions = transactions.filter(t => t.id !== id);
                 await saveTransactions();
                 updateDisplay();
             }
+        }
+        
+        async function replicatePreviousMonth() {
+            // Calcular mês anterior
+            let previousMonth = currentMonth - 1;
+            let previousYear = currentYear;
+            
+            if (previousMonth < 0) {
+                previousMonth = 11;
+                previousYear--;
+            }
+            
+            const previousMonthKey = getMonthKey(previousMonth, previousYear);
+            const currentMonthKey = getMonthKey(currentMonth, currentYear);
+            
+            // Buscar transações do mês anterior
+            const previousMonthTransactions = transactions.filter(t => {
+                const dateParts = t.date.split('-');
+                const tYear = parseInt(dateParts[0]);
+                const tMonth = parseInt(dateParts[1]) - 1;
+                const tMonthKey = getMonthKey(tMonth, tYear);
+                return tMonthKey === previousMonthKey;
+            });
+            
+            // Verificar se já existem transações no mês atual
+            const currentMonthTransactions = getCurrentMonthTransactions();
+            
+            if (currentMonthTransactions.length > 0) {
+                if (!confirm(`Este mês já tem ${currentMonthTransactions.length} transação(ões). Deseja adicionar as ${previousMonthTransactions.length} transações do mês anterior mesmo assim?`)) {
+                    return;
+                }
+            }
+            
+            if (previousMonthTransactions.length === 0) {
+                alert(`❌ Nenhuma transação encontrada em ${monthNames[previousMonth]} ${previousYear}`);
+                return;
+            }
+            
+            // Confirmar replicação
+            const incomeCount = previousMonthTransactions.filter(t => t.type === 'income').length;
+            const expenseCount = previousMonthTransactions.filter(t => t.type === 'expense').length;
+            const replicateMessage = `Replicar ${previousMonthTransactions.length} transações de ${monthNames[previousMonth]} ${previousYear}?\n\n✅ ${incomeCount} provento(s)\n✅ ${expenseCount} gasto(s)`;
+            
+            if (!confirm(replicateMessage)) {
+                return;
+            }
+            
+            // Replicar TODAS as transações do mês anterior
+            const newTransactions = previousMonthTransactions.map(t => {
+                // Criar nova data no primeiro dia do mês atual
+                const newDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+                
+                return {
+                    id: Date.now() + Math.random(), // ID único
+                    type: t.type,
+                    description: t.description,
+                    amount: t.amount,
+                    date: newDate,
+                    adjustments: [], // Resetar ajustes
+                    paid: false, // Resetar status de pagamento
+                    customOrder: {} // Limpar ordem customizada
+                };
+            });
+            
+            // Adicionar ao início da lista
+            transactions.unshift(...newTransactions);
+            
+            await saveTransactions();
+            updateDisplay();
+            
+            alert(`✅ ${newTransactions.length} transações replicadas com sucesso!`);
         }
         
         function updateDisplay() {
@@ -1144,20 +1270,57 @@
             // Filtrar transações do mês
             const monthTransactions = getCurrentMonthTransactions();
             
+            // Atualizar botão de replicar mês anterior
+            const replicateBtnText = document.getElementById('replicateBtnText');
+            let previousMonth = currentMonth - 1;
+            let previousYear = currentYear;
+            if (previousMonth < 0) {
+                previousMonth = 11;
+                previousYear--;
+            }
+            
+            const previousMonthKey = getMonthKey(previousMonth, previousYear);
+            const previousMonthTransactions = transactions.filter(t => {
+                const dateParts = t.date.split('-');
+                const tYear = parseInt(dateParts[0]);
+                const tMonth = parseInt(dateParts[1]) - 1;
+                const tMonthKey = getMonthKey(tMonth, tYear);
+                return tMonthKey === previousMonthKey;
+            });
+            
+            // Mostrar contador com TODAS as transações do mês anterior
+            if (previousMonthTransactions.length > 0) {
+                replicateBtnText.innerHTML = `📋 Replicar ${monthNames[previousMonth]} <span style="background: rgba(100,150,255,0.3); padding: 2px 8px; border-radius: 6px; margin-left: 6px; font-size: 12px;">${previousMonthTransactions.length}</span>`;
+            } else {
+                replicateBtnText.innerHTML = `📋 Replicar Mês Anterior`;
+            }
+            
             const totalIncome = monthTransactions
                 .filter(t => t.type === 'income')
                 .reduce((sum, t) => sum + t.amount, 0);
             
-            const totalExpense = monthTransactions
-                .filter(t => t.type === 'expense')
-                .reduce((sum, t) => sum + t.amount, 0);
+            const expenseTransactions = monthTransactions.filter(t => t.type === 'expense');
+            const totalExpense = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+            const paidExpenses = expenseTransactions.filter(t => t.paid).length;
+            const pendingExpenses = expenseTransactions.length - paidExpenses;
             
             const balance = totalIncome - totalExpense;
             
             document.getElementById('balance').textContent = formatCurrency(balance);
             document.getElementById('balance').className = 'balance-amount ' + (balance >= 0 ? 'positive' : 'negative');
             document.getElementById('totalIncome').textContent = formatCurrency(totalIncome);
-            document.getElementById('totalExpense').textContent = formatCurrency(totalExpense);
+            
+            // Atualizar total de gastos com indicador de status
+            const expenseElement = document.getElementById('totalExpense');
+            expenseElement.textContent = formatCurrency(totalExpense);
+            
+            // Adicionar indicador de pagamentos se houver gastos
+            const expenseSummaryLabel = document.querySelector('.summary-item.expense .summary-label');
+            if (expenseTransactions.length > 0) {
+                expenseSummaryLabel.innerHTML = `Gastos <span style="font-size: 9px; opacity: 0.8;">(${paidExpenses}/${expenseTransactions.length} pagos)</span>`;
+            } else {
+                expenseSummaryLabel.textContent = 'Gastos';
+            }
             
             const transactionsList = document.getElementById('transactionsList');
             
@@ -1170,20 +1333,33 @@
                     </div>
                 `;
             } else {
-                transactionsList.innerHTML = monthTransactions.map((t, index) => `
-                    <div class="transaction-item ${t.type}" draggable="true" data-id="${t.id}" data-index="${index}">
-                        <div class="drag-handle">≡</div>
-                        <div class="transaction-info">
-                            <div class="transaction-description">${t.description}</div>
-                            <div class="transaction-date">${formatDate(t.date)}</div>
+                transactionsList.innerHTML = monthTransactions.map((t, index) => {
+                    const isPaid = t.paid || false;
+                    const paidClass = isPaid ? 'paid' : '';
+                    const checkIcon = isPaid ? '✓' : '';
+                    const checkClass = isPaid ? 'checked' : '';
+                    
+                    // Mostrar checkbox apenas para gastos
+                    const payCheckbox = t.type === 'expense' ? 
+                        `<div class="pay-checkbox ${checkClass}" onclick="event.stopPropagation(); togglePaid(${t.id})">${checkIcon}</div>` : 
+                        '';
+                    
+                    return `
+                        <div class="transaction-item ${t.type} ${paidClass}" draggable="true" data-id="${t.id}" data-index="${index}">
+                            <div class="drag-handle">≡</div>
+                            ${payCheckbox}
+                            <div class="transaction-info">
+                                <div class="transaction-description">${t.description}</div>
+                                <div class="transaction-date">${formatDate(t.date)}</div>
+                            </div>
+                            <div class="transaction-amount">${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}</div>
+                            <div class="transaction-buttons">
+                                <button class="edit-btn" onclick="openModal('${t.type}', ${t.id})">✏️</button>
+                                <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑</button>
+                            </div>
                         </div>
-                        <div class="transaction-amount">${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}</div>
-                        <div class="transaction-buttons">
-                            <button class="edit-btn" onclick="openModal('${t.type}', ${t.id})">✏️</button>
-                            <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑</button>
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
                 
                 // Adicionar event listeners para drag and drop
                 setupDragAndDrop();
