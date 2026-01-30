@@ -281,6 +281,8 @@
         .transaction-info {
             flex: 1;
             padding-left: 12px;
+            min-width: 0;
+            overflow: hidden;
         }
         
         .transaction-description {
@@ -303,6 +305,10 @@
             font-size: 18px;
             font-weight: 800;
             letter-spacing: -0.5px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            min-width: 120px;
+            text-align: right;
         }
         
         .transaction-item.income .transaction-amount {
