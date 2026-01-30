@@ -551,8 +551,11 @@
         function getCurrentMonthTransactions() {
             const monthKey = getMonthKey(currentMonth, currentYear);
             return transactions.filter(t => {
-                const tDate = new Date(t.date);
-                const tMonthKey = getMonthKey(tDate.getMonth(), tDate.getFullYear());
+                // Extrair ano e mês diretamente da string de data (formato YYYY-MM-DD)
+                const dateParts = t.date.split('-');
+                const tYear = parseInt(dateParts[0]);
+                const tMonth = parseInt(dateParts[1]) - 1; // Mês começa em 0
+                const tMonthKey = getMonthKey(tMonth, tYear);
                 return tMonthKey === monthKey;
             });
         }
@@ -679,9 +682,10 @@
                 document.getElementById('description').disabled = false;
                 document.getElementById('date').disabled = false;
                 
-                // Definir data para o primeiro dia do mês selecionado
-                const defaultDate = new Date(currentYear, currentMonth, 1);
-                dateInput.valueAsDate = defaultDate;
+                // Definir data para o primeiro dia do mês selecionado (corrigindo timezone)
+                const yearStr = currentYear;
+                const monthStr = String(currentMonth + 1).padStart(2, '0');
+                dateInput.value = `${yearStr}-${monthStr}-01`;
                 
                 const amountGroup = document.querySelector('.form-group:nth-child(2)');
                 amountGroup.innerHTML = `
