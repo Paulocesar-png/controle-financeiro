@@ -782,10 +782,11 @@
                         const formattedDate = adjDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
                         const adjColor = adj.type === 'add' ? 'var(--accent-green)' : 'var(--accent-red)';
                         const adjSign = adj.type === 'add' ? '+' : '-';
+                        const recurringBadge = adj.recurring ? '<span style="background: rgba(100,150,255,0.2); color: #6496ff; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 6px;">🔄 RECORRENTE</span>' : '';
                         return `
                             <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
                                 <div style="flex: 1;">
-                                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 2px;">${adj.description}</div>
+                                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 2px;">${adj.description} ${recurringBadge}</div>
                                     <div style="font-size: 11px; color: var(--text-secondary);">${formattedDate}</div>
                                 </div>
                                 <div style="font-size: 15px; font-weight: 700; color: ${adjColor};">${adjSign} ${formatCurrency(adj.amount)}</div>
@@ -827,7 +828,11 @@
                         <button type="button" onclick="setAdjustmentType('remove')" id="removeBtn" style="flex: 1; padding: 12px; background: rgba(255,51,102,0.1); border: 2px solid rgba(255,51,102,0.3); color: var(--text-secondary); border-radius: 12px; font-weight: 700; cursor: pointer;">➖ Remover</button>
                     </div>
                     <input type="number" id="adjustment" step="0.01" required placeholder="Valor do ajuste" disabled style="margin-bottom: 12px;">
-                    <input type="text" id="adjustmentDesc" placeholder="Descrição (ex: Lavagem do carro)" disabled style="padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%;">
+                    <input type="text" id="adjustmentDesc" placeholder="Descrição (ex: Lavagem do carro)" disabled style="padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); border-radius: 12px;">
+                        <input type="checkbox" id="recurring" style="width: 20px; height: 20px; cursor: pointer; accent-color: #6496ff;" disabled>
+                        <label for="recurring" style="margin: 0; font-size: 14px; font-weight: 600; color: #6496ff; cursor: pointer; text-transform: none;">🔄 Gasto recorrente (repetir nos próximos meses)</label>
+                    </div>
                     <input type="hidden" id="adjustmentType" value="">
                 `;
                 
@@ -867,6 +872,7 @@
             document.getElementById('adjustmentType').value = type;
             document.getElementById('adjustment').disabled = false;
             document.getElementById('adjustmentDesc').disabled = false;
+            document.getElementById('recurring').disabled = false;
             document.getElementById('adjustment').focus();
             
             const addBtn = document.getElementById('addBtn');
@@ -1121,12 +1127,16 @@
                     transaction.adjustments = [];
                 }
                 
+                // Verificar se é recorrente
+                const isRecurring = document.getElementById('recurring') ? document.getElementById('recurring').checked : false;
+                
                 // Adicionar novo ajuste ao histórico
                 transaction.adjustments.push({
                     type: adjustmentType,
                     amount: adjustmentValue,
                     description: adjustmentDesc,
-                    date: new Date().toISOString()
+                    date: new Date().toISOString(),
+                    recurring: isRecurring
                 });
                 
                 // Atualizar valor total
@@ -1231,7 +1241,7 @@
                 return;
             }
             
-            // Replicar TODAS as transações do mês anterior MANTENDO a ordem
+            // Replicar TODAS as transações do mês anterior MANTENDO a ordem E ajustes recorrentes
             const newTransactions = previousMonthTransactions.map((t, index) => {
                 // Criar nova data no primeiro dia do mês atual
                 const newDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
@@ -1240,13 +1250,34 @@
                 const newCustomOrder = {};
                 newCustomOrder[currentMonthKey] = index; // Manter a mesma ordem do mês anterior
                 
+                // Filtrar apenas os ajustes marcados como recorrentes
+                const recurringAdjustments = (t.adjustments || []).filter(adj => adj.recurring === true);
+                
+                // Calcular valor base da transação (valor original sem ajustes não-recorrentes)
+                let baseAmount = t.amount;
+                if (t.adjustments && t.adjustments.length > 0) {
+                    // Reverter os ajustes não-recorrentes
+                    t.adjustments.forEach(adj => {
+                        if (!adj.recurring) {
+                            if (adj.type === 'add') {
+                                baseAmount -= adj.amount;
+                            } else {
+                                baseAmount += adj.amount;
+                            }
+                        }
+                    });
+                }
+                
                 return {
                     id: Date.now() + Math.random(), // ID único
                     type: t.type,
                     description: t.description,
-                    amount: t.amount,
+                    amount: baseAmount, // Valor base (sem ajustes não-recorrentes)
                     date: newDate,
-                    adjustments: [], // Resetar ajustes
+                    adjustments: recurringAdjustments.map(adj => ({
+                        ...adj,
+                        date: new Date().toISOString() // Atualizar data do ajuste
+                    })), // Copiar apenas ajustes recorrentes
                     paid: false, // Resetar status de pagamento
                     customOrder: newCustomOrder // Aplicar ordem customizada do mês anterior
                 };
