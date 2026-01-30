@@ -659,19 +659,49 @@
                 document.getElementById('date').value = transaction.date;
                 document.getElementById('date').disabled = true;
                 
-                // Mostrar valor atual e campo de ajuste
+                // Mostrar valor atual, histórico de ajustes e campo de novo ajuste
                 const amountGroup = document.querySelector('.form-group:nth-child(2)');
+                
+                // Construir histórico de ajustes
+                let adjustmentsHTML = '';
+                if (transaction.adjustments && transaction.adjustments.length > 0) {
+                    adjustmentsHTML = `
+                        <div style="margin-top: 16px; margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--border-color);">
+                            <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Histórico de Ajustes</div>
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                ${transaction.adjustments.map(adj => {
+                                    const adjDate = new Date(adj.date);
+                                    const formattedDate = adjDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                                    const adjColor = adj.type === 'add' ? 'var(--accent-green)' : 'var(--accent-red)';
+                                    const adjSign = adj.type === 'add' ? '+' : '-';
+                                    return `
+                                        <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
+                                            <div style="flex: 1;">
+                                                <div style="font-size: 13px; font-weight: 600; margin-bottom: 2px;">${adj.description}</div>
+                                                <div style="font-size: 11px; color: var(--text-secondary);">${formattedDate}</div>
+                                            </div>
+                                            <div style="font-size: 15px; font-weight: 700; color: ${adjColor};">${adjSign} ${formatCurrency(adj.amount)}</div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 amountGroup.innerHTML = `
                     <label>Valor Atual</label>
                     <div style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 14px; border: 1px solid var(--border-color); color: var(--accent-green); font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 16px;">
                         ${formatCurrency(transaction.amount)}
                     </div>
-                    <label for="adjustment">Ajustar Valor</label>
-                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    ${adjustmentsHTML}
+                    <label for="adjustment">Novo Ajuste</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                         <button type="button" onclick="setAdjustmentType('add')" id="addBtn" style="flex: 1; padding: 12px; background: rgba(0,255,136,0.1); border: 2px solid var(--accent-green); color: var(--accent-green); border-radius: 12px; font-weight: 700; cursor: pointer;">➕ Adicionar</button>
                         <button type="button" onclick="setAdjustmentType('remove')" id="removeBtn" style="flex: 1; padding: 12px; background: rgba(255,51,102,0.1); border: 2px solid rgba(255,51,102,0.3); color: var(--text-secondary); border-radius: 12px; font-weight: 700; cursor: pointer;">➖ Remover</button>
                     </div>
-                    <input type="number" id="adjustment" step="0.01" required placeholder="0,00" disabled>
+                    <input type="number" id="adjustment" step="0.01" required placeholder="Valor do ajuste" disabled style="margin-bottom: 12px;">
+                    <input type="text" id="adjustmentDesc" placeholder="Descrição (ex: Lavagem do carro)" disabled style="padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%;">
                     <input type="hidden" id="adjustmentType" value="">
                 `;
                 
@@ -710,6 +740,7 @@
         function setAdjustmentType(type) {
             document.getElementById('adjustmentType').value = type;
             document.getElementById('adjustment').disabled = false;
+            document.getElementById('adjustmentDesc').disabled = false;
             document.getElementById('adjustment').focus();
             
             const addBtn = document.getElementById('addBtn');
@@ -749,12 +780,33 @@
                 const transaction = transactions.find(t => t.id === editingId);
                 const adjustmentType = document.getElementById('adjustmentType').value;
                 const adjustmentValue = parseFloat(document.getElementById('adjustment').value);
+                const adjustmentDesc = document.getElementById('adjustmentDesc').value.trim();
                 
                 if (!adjustmentType) {
                     alert('Selecione se deseja adicionar ou remover valor');
                     return;
                 }
                 
+                if (!adjustmentDesc) {
+                    alert('Por favor, adicione uma descrição para este ajuste');
+                    document.getElementById('adjustmentDesc').focus();
+                    return;
+                }
+                
+                // Inicializar array de ajustes se não existir
+                if (!transaction.adjustments) {
+                    transaction.adjustments = [];
+                }
+                
+                // Adicionar novo ajuste ao histórico
+                transaction.adjustments.push({
+                    type: adjustmentType,
+                    amount: adjustmentValue,
+                    description: adjustmentDesc,
+                    date: new Date().toISOString()
+                });
+                
+                // Atualizar valor total
                 if (adjustmentType === 'add') {
                     transaction.amount += adjustmentValue;
                 } else {
@@ -769,7 +821,8 @@
                     type: currentType,
                     description,
                     amount,
-                    date
+                    date,
+                    adjustments: [] // Inicializar com array vazio
                 };
                 transactions.unshift(transaction);
             }
