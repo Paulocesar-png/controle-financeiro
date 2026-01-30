@@ -1218,10 +1218,14 @@
                 return;
             }
             
-            // Replicar TODAS as transações do mês anterior
-            const newTransactions = previousMonthTransactions.map(t => {
+            // Replicar TODAS as transações do mês anterior MANTENDO a ordem
+            const newTransactions = previousMonthTransactions.map((t, index) => {
                 // Criar nova data no primeiro dia do mês atual
                 const newDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+                
+                // Criar ordem customizada para o mês atual
+                const newCustomOrder = {};
+                newCustomOrder[currentMonthKey] = index; // Manter a mesma ordem do mês anterior
                 
                 return {
                     id: Date.now() + Math.random(), // ID único
@@ -1231,7 +1235,7 @@
                     date: newDate,
                     adjustments: [], // Resetar ajustes
                     paid: false, // Resetar status de pagamento
-                    customOrder: {} // Limpar ordem customizada
+                    customOrder: newCustomOrder // Aplicar ordem customizada do mês anterior
                 };
             });
             
