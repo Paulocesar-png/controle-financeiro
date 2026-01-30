@@ -470,7 +470,14 @@
     </div>
     
     <div class="transactions">
-        <div class="transactions-header">Últimas Transações</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div class="transactions-header">Últimas Transações</div>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="exportData()" style="background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); color: var(--accent-green); padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">💾 Backup</button>
+                <button onclick="document.getElementById('importFile').click()" style="background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer;">📥 Restaurar</button>
+            </div>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(this.files[0])">
         <div id="transactionsList"></div>
     </div>
     
@@ -503,23 +510,81 @@
         let currentType = '';
         let editingId = null;
         
+        let db;
+        
+        // Inicializar IndexedDB - banco de dados local robusto
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('ControleFinanceiroDB', 1);
+                
+                request.onerror = () => {
+                    console.error('❌ Erro ao abrir banco:', request.error);
+                    reject(request.error);
+                };
+                
+                request.onsuccess = () => {
+                    db = request.result;
+                    console.log('✅ Banco de dados conectado');
+                    resolve(db);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result;
+                    if (!db.objectStoreNames.contains('transactions')) {
+                        const store = db.createObjectStore('transactions', { keyPath: 'id' });
+                        console.log('✅ Tabela de transações criada');
+                    }
+                };
+            });
+        }
+        
         async function loadTransactions() {
             try {
-                const result = await window.storage.get('transactions');
-                if (result && result.value) {
-                    transactions = JSON.parse(result.value);
-                }
+                if (!db) await initDB();
+                
+                const transaction = db.transaction(['transactions'], 'readonly');
+                const store = transaction.objectStore('transactions');
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    transactions = request.result || [];
+                    transactions.sort((a, b) => b.id - a.id);
+                    console.log('✅ Carregadas', transactions.length, 'transações do banco');
+                    updateDisplay();
+                };
+                
+                request.onerror = () => {
+                    console.error('❌ Erro ao carregar transações');
+                    updateDisplay();
+                };
             } catch (error) {
-                console.log('Nenhuma transação salva ainda');
+                console.error('❌ Erro ao inicializar:', error);
+                updateDisplay();
             }
-            updateDisplay();
         }
         
         async function saveTransactions() {
             try {
-                await window.storage.set('transactions', JSON.stringify(transactions));
+                if (!db) await initDB();
+                
+                const transaction = db.transaction(['transactions'], 'readwrite');
+                const store = transaction.objectStore('transactions');
+                
+                // Limpar banco e salvar tudo novamente
+                const clearRequest = store.clear();
+                
+                clearRequest.onsuccess = () => {
+                    transactions.forEach(t => {
+                        store.add(t);
+                    });
+                    console.log('✅ Salvas', transactions.length, 'transações no banco');
+                };
+                
+                transaction.onerror = () => {
+                    console.error('❌ Erro ao salvar transações');
+                };
             } catch (error) {
-                console.error('Erro ao salvar:', error);
+                console.error('❌ Erro ao salvar:', error);
             }
         }
         
@@ -724,6 +789,38 @@
                 month: '2-digit',
                 year: 'numeric'
             });
+        }
+        
+        // Exportar dados (Backup)
+        function exportData() {
+            const dataStr = JSON.stringify(transactions, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `backup-financeiro-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            alert('✅ Backup salvo! Guarde este arquivo em local seguro.');
+        }
+        
+        // Importar dados (Restaurar)
+        function importData(file) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const importedTransactions = JSON.parse(e.target.result);
+                    if (confirm(`Deseja restaurar ${importedTransactions.length} transações? Isso substituirá os dados atuais.`)) {
+                        transactions = importedTransactions;
+                        await saveTransactions();
+                        updateDisplay();
+                        alert('✅ Dados restaurados com sucesso!');
+                    }
+                } catch (error) {
+                    alert('❌ Erro ao importar arquivo. Verifique se é um backup válido.');
+                }
+            };
+            reader.readAsText(file);
         }
         
         loadTransactions();
