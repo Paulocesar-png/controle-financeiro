@@ -213,12 +213,25 @@
             padding: 16px;
             margin-bottom: 10px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
             position: relative;
             overflow: hidden;
             transition: all 0.2s;
             /* touch-action: none; REMOVIDO - Permitir scroll */
+        }
+        
+        .transaction-item-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .transaction-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-left: 48px;
         }
         
         .transaction-item.paid {
@@ -252,9 +265,9 @@
             color: var(--text-secondary);
             font-size: 20px;
             padding: 8px;
-            margin-right: 8px;
-            touch-action: none; /* Manter apenas no handle */
+            touch-action: none;
             user-select: none;
+            flex-shrink: 0;
         }
         
         .drag-handle:active {
@@ -280,35 +293,29 @@
         
         .transaction-info {
             flex: 1;
-            padding-left: 12px;
             min-width: 0;
-            overflow: hidden;
         }
         
         .transaction-description {
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: 4px;
-            letter-spacing: -0.2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
         }
         
         .transaction-date {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
-            font-weight: 500;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .transaction-amount {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 800;
-            letter-spacing: -0.5px;
+            letter-spacing: -0.8px;
             white-space: nowrap;
             flex-shrink: 0;
-            min-width: 120px;
-            text-align: right;
         }
         
         .transaction-item.income .transaction-amount {
@@ -1348,20 +1355,24 @@
                     // Mostrar checkbox apenas para gastos
                     const payCheckbox = t.type === 'expense' ? 
                         `<div class="pay-checkbox ${checkClass}" onclick="event.stopPropagation(); togglePaid(${t.id})">${checkIcon}</div>` : 
-                        '';
+                        '<div style="width: 24px; margin-right: 12px;"></div>';
                     
                     return `
                         <div class="transaction-item ${t.type} ${paidClass}" draggable="true" data-id="${t.id}" data-index="${index}">
-                            <div class="drag-handle">≡</div>
-                            ${payCheckbox}
-                            <div class="transaction-info">
-                                <div class="transaction-description">${t.description}</div>
-                                <div class="transaction-date">${formatDate(t.date)}</div>
+                            <div class="transaction-item-header">
+                                <div class="drag-handle">≡</div>
+                                ${payCheckbox}
+                                <div class="transaction-info">
+                                    <div class="transaction-description">${t.description}</div>
+                                </div>
+                                <div class="transaction-amount">${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}</div>
                             </div>
-                            <div class="transaction-amount">${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}</div>
-                            <div class="transaction-buttons">
-                                <button class="edit-btn" onclick="openModal('${t.type}', ${t.id})">✏️</button>
-                                <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑</button>
+                            <div class="transaction-item-footer">
+                                <div class="transaction-date">${formatDate(t.date)}</div>
+                                <div class="transaction-buttons">
+                                    <button class="edit-btn" onclick="openModal('${t.type}', ${t.id})">✏️</button>
+                                    <button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑</button>
+                                </div>
                             </div>
                         </div>
                     `;
