@@ -592,7 +592,7 @@
                 </div>
                 <div class="form-group">
                     <label for="amount">Valor (R$)</label>
-                    <input type="number" id="amount" step="0.01" required placeholder="0,00">
+                    <input type="text" inputmode="decimal" id="amount" required placeholder="0,00" oninput="formatCurrencyInput(this)">
                 </div>
                 <div class="form-group">
                     <label for="date">Data</label>
@@ -633,6 +633,36 @@
             currentMonth = today.getMonth();
             currentYear = today.getFullYear();
             updateDisplay();
+        }
+        
+        // Função para formatar input de valor - aceita vírgula e ponto (iOS/Android)
+        function formatCurrencyInput(input) {
+            let value = input.value;
+            
+            // Remove tudo exceto números, vírgula e ponto
+            value = value.replace(/[^\d,\.]/g, '');
+            
+            // Substitui vírgula por ponto para padronizar
+            value = value.replace(',', '.');
+            
+            // Remove pontos extras (manter apenas o primeiro)
+            const parts = value.split('.');
+            if (parts.length > 2) {
+                value = parts[0] + '.' + parts.slice(1).join('');
+            }
+            
+            // Limitar a 2 casas decimais
+            if (parts.length === 2 && parts[1].length > 2) {
+                value = parts[0] + '.' + parts[1].substring(0, 2);
+            }
+            
+            input.value = value;
+        }
+        
+        // Função para converter valor do input para número
+        function parseInputAmount(value) {
+            // Substitui vírgula por ponto e converte para float
+            return parseFloat(value.replace(',', '.')) || 0;
         }
         
         function getMonthKey(month, year) {
@@ -828,7 +858,7 @@
                             <button onclick="toggleEditAmount()" id="editAmountBtn" type="button" style="background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); color: #6496ff; padding: 8px 12px; border-radius: 10px; font-size: 14px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(100,150,255,0.2)'" onmouseout="this.style.background='rgba(100,150,255,0.1)'">✏️ Editar</button>
                         </div>
                         <div id="editAmountSection" style="display: none; margin-bottom: 16px;">
-                            <input type="number" id="newAmount" step="0.01" placeholder="Novo valor total" style="padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%; margin-bottom: 8px;">
+                            <input type="text" inputmode="decimal" id="newAmount" placeholder="Novo valor total" oninput="formatCurrencyInput(this)" style="padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%; margin-bottom: 8px;">
                             <div style="display: flex; gap: 8px;">
                                 <button onclick="saveNewAmount(${transaction.id})" type="button" style="flex: 1; padding: 12px; background: var(--accent-green); color: #0a0e27; border: none; border-radius: 12px; font-weight: 700; cursor: pointer;">✓ Salvar</button>
                                 <button onclick="toggleEditAmount()" type="button" style="flex: 1; padding: 12px; background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 12px; font-weight: 700; cursor: pointer;">✕ Cancelar</button>
@@ -844,7 +874,7 @@
                         <button type="button" onclick="setAdjustmentType('add')" id="addBtn" style="flex: 1; padding: 12px; background: rgba(0,255,136,0.1); border: 2px solid var(--accent-green); color: var(--accent-green); border-radius: 12px; font-weight: 700; cursor: pointer;">➕ Adicionar</button>
                         <button type="button" onclick="setAdjustmentType('remove')" id="removeBtn" style="flex: 1; padding: 12px; background: rgba(255,51,102,0.1); border: 2px solid rgba(255,51,102,0.3); color: var(--text-secondary); border-radius: 12px; font-weight: 700; cursor: pointer;">➖ Remover</button>
                     </div>
-                    <input type="number" id="adjustment" step="0.01" required placeholder="Valor do ajuste" disabled style="margin-bottom: 12px;">
+                    <input type="text" inputmode="decimal" id="adjustment" required placeholder="Valor do ajuste" disabled style="margin-bottom: 12px; padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%;" oninput="formatCurrencyInput(this)">
                     <input type="text" id="adjustmentDesc" placeholder="Descrição (ex: Lavagem do carro)" disabled style="padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 14px; color: var(--text-primary); font-family: inherit; font-size: 16px; width: 100%; margin-bottom: 12px;">
                     <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(100,150,255,0.1); border: 1px solid rgba(100,150,255,0.3); border-radius: 12px;">
                         <input type="checkbox" id="recurring" style="width: 20px; height: 20px; cursor: pointer; accent-color: #6496ff;" disabled>
@@ -868,7 +898,7 @@
                 const amountGroup = document.querySelector('.form-group:nth-child(2)');
                 amountGroup.innerHTML = `
                     <label for="amount">Valor (R$)</label>
-                    <input type="number" id="amount" step="0.01" required placeholder="0,00">
+                    <input type="text" inputmode="decimal" id="amount" required placeholder="0,00" oninput="formatCurrencyInput(this)">
                 `;
                 
                 if (type === 'income') {
@@ -942,7 +972,7 @@
         
         async function saveNewAmount(transactionId) {
             const newAmountInput = document.getElementById('newAmount');
-            const newAmount = parseFloat(newAmountInput.value);
+            const newAmount = parseInputAmount(newAmountInput.value);
             
             if (isNaN(newAmount) || newAmount <= 0) {
                 alert('⚠️ Digite um valor válido maior que zero');
@@ -1242,11 +1272,17 @@
                 // Modo de edição - ajustar valor
                 const transaction = transactions.find(t => t.id === editingId);
                 const adjustmentType = document.getElementById('adjustmentType').value;
-                const adjustmentValue = parseFloat(document.getElementById('adjustment').value);
+                const adjustmentValue = parseInputAmount(document.getElementById('adjustment').value);
                 const adjustmentDesc = document.getElementById('adjustmentDesc').value.trim();
                 
                 if (!adjustmentType) {
                     alert('Selecione se deseja adicionar ou remover valor');
+                    return;
+                }
+                
+                if (isNaN(adjustmentValue) || adjustmentValue <= 0) {
+                    alert('⚠️ Por favor, insira um valor válido maior que zero');
+                    document.getElementById('adjustment').focus();
                     return;
                 }
                 
@@ -1314,7 +1350,14 @@
                 }
             } else {
                 // Modo de criação
-                const amount = parseFloat(document.getElementById('amount').value);
+                const amount = parseInputAmount(document.getElementById('amount').value);
+                
+                if (isNaN(amount) || amount <= 0) {
+                    alert('⚠️ Por favor, insira um valor válido maior que zero');
+                    document.getElementById('amount').focus();
+                    return;
+                }
+                
                 const transaction = {
                     id: Date.now(),
                     type: currentType,
