@@ -529,9 +529,8 @@
             <button onclick="changeMonth(-1)" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer;">‹</button>
             <div onclick="goToCurrentMonth()" id="currentMonth" style="font-size: 16px; font-weight: 700; min-width: 150px; text-align: center; cursor: pointer;"></div>
             <button onclick="changeMonth(1)" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer;">›</button>
-            <button onclick="recalculateValues()" title="Atualizar e recalcular valores" style="background: rgba(0,255,136,0.15); border: 1px solid rgba(0,255,136,0.3); color: var(--accent-green); width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,255,136,0.25)'" onmouseout="this.style.background='rgba(0,255,136,0.15)'">🔄</button>
         </div>
-        <div style="margin-top: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">Clique no mês para voltar ao atual • 🔄 para recalcular</div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">Clique no mês para voltar ao atual</div>
     </div>
     
     <div class="balance-card">
@@ -634,73 +633,6 @@
             currentMonth = today.getMonth();
             currentYear = today.getFullYear();
             updateDisplay();
-        }
-        
-        async function recalculateValues() {
-            // Mostrar feedback visual
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = '⏳';
-            btn.disabled = true;
-            btn.style.opacity = '0.6';
-            
-            try {
-                // Percorrer todas as transações e recalcular valores com base nos ajustes
-                transactions.forEach(transaction => {
-                    if (transaction.adjustments && transaction.adjustments.length > 0) {
-                        // Encontrar o valor base (primeiro valor sem ajustes ou recalcular do zero)
-                        // Para simplificar, vamos apenas garantir que os ajustes estão aplicados corretamente
-                        let calculatedAmount = transaction.baseAmount || transaction.amount;
-                        
-                        // Se não tem baseAmount, assumir que o amount atual é base
-                        if (!transaction.baseAmount) {
-                            // Reverter todos os ajustes para encontrar o valor base
-                            let baseValue = transaction.amount;
-                            transaction.adjustments.forEach(adj => {
-                                if (adj.type === 'add') {
-                                    baseValue -= adj.amount;
-                                } else {
-                                    baseValue += adj.amount;
-                                }
-                            });
-                            transaction.baseAmount = baseValue;
-                            calculatedAmount = baseValue;
-                        }
-                        
-                        // Aplicar todos os ajustes novamente
-                        transaction.adjustments.forEach(adj => {
-                            if (adj.type === 'add') {
-                                calculatedAmount += adj.amount;
-                            } else {
-                                calculatedAmount -= adj.amount;
-                            }
-                        });
-                        
-                        transaction.amount = Math.max(0, calculatedAmount);
-                    }
-                });
-                
-                // Salvar e atualizar
-                await saveTransactions();
-                updateDisplay();
-                
-                // Feedback de sucesso
-                btn.textContent = '✓';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                }, 1000);
-                
-            } catch (error) {
-                console.error('Erro ao recalcular:', error);
-                btn.textContent = '✕';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                }, 1000);
-            }
         }
         
         // Função para formatar input de valor - aceita vírgula e ponto (iOS/Android)
