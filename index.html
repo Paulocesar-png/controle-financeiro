@@ -994,9 +994,10 @@
             
             // Atualizar valor
             transaction.amount = newAmount;
-            
+
             await saveTransactions();
-            
+            updateDisplay();
+
             // Reabrir modal para mostrar mudança
             closeModal();
             setTimeout(() => {
@@ -1409,9 +1410,10 @@
             
             // Remover o ajuste do array
             transaction.adjustments.splice(adjustmentIndex, 1);
-            
+
             await saveTransactions();
-            
+            updateDisplay();
+
             // Reabrir o modal para mostrar a mudança
             closeModal();
             setTimeout(() => {
